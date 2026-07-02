@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>星翼突击</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="星翼突击飞行战斗小游戏">
+    <canvas id="game" width="960" height="540"></canvas>
+
+    <section class="hud" aria-live="polite">
+      <div>
+        <span>分数</span>
+        <strong id="score">0</strong>
+      </div>
+      <div>
+        <span>生命</span>
+        <strong id="lives">3</strong>
+      </div>
+      <div>
+        <span>护盾</span>
+        <strong id="shield">100%</strong>
+      </div>
+      <div>
+        <span>波次</span>
+        <strong id="wave">1</strong>
+      </div>
+    </section>
+
+    <section id="overlay" class="overlay">
+      <div class="panel">
+        <p class="eyebrow">空域警报</p>
+        <h1>星翼突击</h1>
+        <p class="status" id="status">击落敌机，躲避弹幕，撑到更高波次。</p>
+        <div class="actions">
+          <button id="startButton" type="button">开始战斗</button>
+        </div>
+        <p class="controls">WASD / 方向键移动，空格射击，P 暂停。手机上拖动飞机，点按屏幕射击。</p>
+      </div>
+    </section>
+
+    <section class="touch-controls" aria-hidden="true">
+      <button id="fireButton" type="button">开火</button>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
