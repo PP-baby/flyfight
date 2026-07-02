@@ -46,6 +46,55 @@ const enemies = [];
 const particles = [];
 const stars = [];
 const powerups = [];
+const nebulae = [];
+const asteroids = [];
+
+const spaceThemes = [
+  {
+    name: "azure-rift",
+    top: "#06101c",
+    mid: "#0a1d28",
+    bottom: "#15181f",
+    nebula: "rgba(56, 189, 248, 0.2)",
+    nebula2: "rgba(125, 219, 220, 0.14)",
+    line: "rgba(125, 219, 220, 0.09)",
+    star: "238, 247, 255",
+    planet: "#385a76",
+  },
+  {
+    name: "violet-nebula",
+    top: "#0e0920",
+    mid: "#1d1130",
+    bottom: "#231522",
+    nebula: "rgba(199, 125, 255, 0.22)",
+    nebula2: "rgba(83, 214, 255, 0.12)",
+    line: "rgba(199, 125, 255, 0.08)",
+    star: "244, 232, 255",
+    planet: "#5a417b",
+  },
+  {
+    name: "ember-galaxy",
+    top: "#120d10",
+    mid: "#20151b",
+    bottom: "#281b16",
+    nebula: "rgba(232, 93, 72, 0.2)",
+    nebula2: "rgba(242, 193, 78, 0.12)",
+    line: "rgba(242, 193, 78, 0.08)",
+    star: "255, 236, 204",
+    planet: "#75513c",
+  },
+  {
+    name: "green-void",
+    top: "#061410",
+    mid: "#0d211e",
+    bottom: "#111b1b",
+    nebula: "rgba(74, 222, 128, 0.18)",
+    nebula2: "rgba(45, 212, 191, 0.12)",
+    line: "rgba(74, 222, 128, 0.08)",
+    star: "223, 255, 241",
+    planet: "#2f665c",
+  },
+];
 
 for (let i = 0; i < 120; i++) {
   stars.push({
@@ -53,6 +102,26 @@ for (let i = 0; i < 120; i++) {
     y: Math.random() * world.h,
     z: Math.random() * 2 + 0.35,
     s: Math.random() * 1.8 + 0.5,
+  });
+}
+
+for (let i = 0; i < 8; i++) {
+  nebulae.push({
+    x: Math.random() * world.w,
+    y: Math.random() * world.h,
+    r: 120 + Math.random() * 180,
+    drift: 4 + Math.random() * 10,
+    alpha: 0.45 + Math.random() * 0.45,
+  });
+}
+
+for (let i = 0; i < 22; i++) {
+  asteroids.push({
+    x: Math.random() * world.w,
+    y: 80 + Math.random() * (world.h - 160),
+    r: 5 + Math.random() * 14,
+    spin: Math.random() * Math.PI,
+    speed: 18 + Math.random() * 38,
   });
 }
 
@@ -109,7 +178,16 @@ function updateHud() {
 function spawnEnemy() {
   const level = state.wave;
   const roll = Math.random();
-  const type = level > 3 && roll > 0.72 ? "heavy" : level > 1 && roll > 0.48 ? "zig" : "scout";
+  let type = "scout";
+  if (level > 5 && roll > 0.82) {
+    type = "blade";
+  } else if (level > 3 && roll > 0.64) {
+    type = "heavy";
+  } else if (level > 2 && roll > 0.42) {
+    type = "drone";
+  } else if (level > 1 && roll > 0.24) {
+    type = "zig";
+  }
   const base = {
     type,
     x: world.w + 50,
@@ -120,6 +198,10 @@ function spawnEnemy() {
 
   if (type === "heavy") {
     enemies.push({ ...base, r: 30, hp: 7 + level, speed: 65 + level * 4, score: 150 });
+  } else if (type === "blade") {
+    enemies.push({ ...base, r: 26, hp: 5 + Math.floor(level * 0.7), speed: 130 + level * 4, score: 130 });
+  } else if (type === "drone") {
+    enemies.push({ ...base, r: 19, hp: 3 + Math.floor(level / 2), speed: 100 + level * 5, score: 95 });
   } else if (type === "zig") {
     enemies.push({ ...base, r: 22, hp: 3 + Math.floor(level / 2), speed: 115 + level * 5, score: 90 });
   } else {
@@ -167,14 +249,14 @@ function enemyFire(enemy) {
   const dx = player.x - enemy.x;
   const dy = player.y - enemy.y;
   const len = Math.hypot(dx, dy) || 1;
-  const speed = enemy.type === "heavy" ? 170 : 210;
+  const speed = enemy.type === "heavy" ? 170 : enemy.type === "blade" ? 245 : 210;
   enemyBullets.push({
     x: enemy.x - enemy.r,
     y: enemy.y,
     vx: (dx / len) * speed - 40,
     vy: (dy / len) * speed,
-    r: enemy.type === "heavy" ? 7 : 5,
-    damage: enemy.type === "heavy" ? 18 : 11,
+    r: enemy.type === "heavy" ? 7 : enemy.type === "blade" ? 4 : 5,
+    damage: enemy.type === "heavy" ? 18 : enemy.type === "blade" ? 13 : 11,
   });
 }
 
@@ -299,11 +381,16 @@ function update(dt) {
     enemy.phase += dt * 3;
     enemy.x -= enemy.speed * dt;
     if (enemy.type === "zig") enemy.y += Math.sin(enemy.phase) * 105 * dt;
+    if (enemy.type === "drone") enemy.y += Math.sin(enemy.phase * 1.7) * 70 * dt;
     if (enemy.type === "heavy") enemy.y += Math.sin(enemy.phase * 0.8) * 38 * dt;
+    if (enemy.type === "blade") {
+      enemy.y += Math.sin(enemy.phase * 2.2) * 140 * dt;
+      enemy.x -= Math.max(0, Math.cos(enemy.phase)) * 45 * dt;
+    }
     enemy.fire -= dt;
     if (enemy.fire <= 0 && enemy.x < world.w - 80) {
       enemyFire(enemy);
-      enemy.fire = enemy.type === "heavy" ? 0.8 : 1.35 + Math.random() * 0.45;
+      enemy.fire = enemy.type === "heavy" ? 0.8 : enemy.type === "blade" ? 0.95 : 1.35 + Math.random() * 0.45;
     }
   }
 
@@ -446,14 +533,18 @@ function draw() {
 }
 
 function drawBackground() {
+  const theme = currentTheme();
   const gradient = ctx.createLinearGradient(0, 0, world.w, world.h);
-  gradient.addColorStop(0, "#07121a");
-  gradient.addColorStop(0.55, "#0b1820");
-  gradient.addColorStop(1, "#161a1d");
+  gradient.addColorStop(0, theme.top);
+  gradient.addColorStop(0.55, theme.mid);
+  gradient.addColorStop(1, theme.bottom);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, world.w, world.h);
 
-  ctx.strokeStyle = "rgba(125, 219, 220, 0.08)";
+  drawNebulas(theme);
+  drawDistantPlanet(theme);
+
+  ctx.strokeStyle = theme.line;
   ctx.lineWidth = 1;
   for (let x = (performance.now() * -0.025) % 64; x < world.w; x += 64) {
     ctx.beginPath();
@@ -463,9 +554,82 @@ function drawBackground() {
   }
 
   for (const star of stars) {
-    ctx.fillStyle = `rgba(238, 247, 255, ${0.24 + star.z * 0.22})`;
+    ctx.fillStyle = `rgba(${theme.star}, ${0.24 + star.z * 0.22})`;
     ctx.fillRect(star.x, star.y, star.s * star.z, star.s * star.z);
   }
+
+  if (state.wave >= 4) drawAsteroidBelt(theme);
+}
+
+function currentTheme() {
+  return spaceThemes[Math.floor((state.wave - 1) / 2) % spaceThemes.length];
+}
+
+function drawNebulas(theme) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (const cloud of nebulae) {
+    const x = (cloud.x - performance.now() * 0.002 * cloud.drift + world.w) % (world.w + cloud.r) - cloud.r * 0.35;
+    const glow = ctx.createRadialGradient(x, cloud.y, 0, x, cloud.y, cloud.r);
+    glow.addColorStop(0, theme.nebula);
+    glow.addColorStop(0.42, theme.nebula2);
+    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.globalAlpha = cloud.alpha;
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, cloud.y, cloud.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawDistantPlanet(theme) {
+  const index = Math.floor((state.wave - 1) / 2);
+  const x = world.w - 120 - (index % 3) * 155;
+  const y = 86 + (index % 4) * 54;
+  const r = 42 + (index % 3) * 12;
+  const planet = ctx.createRadialGradient(x - r * 0.35, y - r * 0.38, 4, x, y, r);
+  planet.addColorStop(0, "#d8f7ff");
+  planet.addColorStop(0.12, theme.planet);
+  planet.addColorStop(1, "rgba(6, 9, 15, 0.18)");
+  ctx.save();
+  ctx.globalAlpha = 0.36;
+  ctx.fillStyle = planet;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = theme.line;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(x, y + 4, r * 1.65, r * 0.28, -0.22, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawAsteroidBelt(theme) {
+  ctx.save();
+  ctx.fillStyle = `rgba(${theme.star}, 0.35)`;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+  for (const rock of asteroids) {
+    const x = (rock.x - performance.now() * 0.018 * rock.speed + world.w + 120) % (world.w + 160) - 80;
+    const y = rock.y + Math.sin(performance.now() * 0.001 + rock.spin) * 16;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rock.spin + performance.now() * 0.0008);
+    ctx.beginPath();
+    ctx.moveTo(-rock.r, -rock.r * 0.2);
+    ctx.lineTo(-rock.r * 0.45, -rock.r * 0.85);
+    ctx.lineTo(rock.r * 0.65, -rock.r * 0.55);
+    ctx.lineTo(rock.r, rock.r * 0.1);
+    ctx.lineTo(rock.r * 0.32, rock.r * 0.85);
+    ctx.lineTo(-rock.r * 0.7, rock.r * 0.62);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function drawPlayer() {
@@ -480,28 +644,83 @@ function drawPlayer() {
     ctx.arc(0, 0, 32 + Math.sin(performance.now() * 0.018) * 3, 0, Math.PI * 2);
     ctx.stroke();
   }
+  const hull = ctx.createLinearGradient(-28, 0, 32, 0);
+  hull.addColorStop(0, "#2b7f94");
+  hull.addColorStop(0.46, "#bdf9ff");
+  hull.addColorStop(1, "#eef7ff");
+  ctx.shadowColor = "rgba(125, 219, 220, 0.55)";
+  ctx.shadowBlur = 18;
+
+  ctx.fillStyle = "rgba(36, 132, 154, 0.92)";
+  ctx.beginPath();
+  ctx.moveTo(4, -5);
+  ctx.lineTo(-28, -27);
+  ctx.lineTo(-15, -5);
+  ctx.lineTo(-3, 0);
+  ctx.lineTo(-15, 5);
+  ctx.lineTo(-28, 27);
+  ctx.lineTo(4, 5);
+  ctx.closePath();
+  ctx.fill();
+
   ctx.fillStyle = "#7ddbdc";
   ctx.beginPath();
-  ctx.moveTo(26, 0);
-  ctx.lineTo(-18, -18);
-  ctx.lineTo(-8, 0);
-  ctx.lineTo(-18, 18);
+  ctx.moveTo(18, -9);
+  ctx.lineTo(-18, -17);
+  ctx.lineTo(-8, -4);
+  ctx.lineTo(8, 0);
   ctx.closePath();
   ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(18, 9);
+  ctx.lineTo(-18, 17);
+  ctx.lineTo(-8, 4);
+  ctx.lineTo(8, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = hull;
+  ctx.beginPath();
+  ctx.moveTo(34, 0);
+  ctx.lineTo(6, -14);
+  ctx.lineTo(-24, -8);
+  ctx.lineTo(-12, 0);
+  ctx.lineTo(-24, 8);
+  ctx.lineTo(6, 14);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(238, 247, 255, 0.75)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
   ctx.fillStyle = "#eef7ff";
   ctx.beginPath();
-  ctx.moveTo(9, 0);
-  ctx.lineTo(-7, -7);
+  ctx.moveTo(12, 0);
+  ctx.lineTo(-8, -5);
   ctx.lineTo(-3, 0);
-  ctx.lineTo(-7, 7);
+  ctx.lineTo(-8, 5);
   ctx.closePath();
   ctx.fill();
+
+  const cockpit = ctx.createRadialGradient(8, -3, 1, 8, 0, 9);
+  cockpit.addColorStop(0, "#ffffff");
+  cockpit.addColorStop(0.35, "#8ff3ff");
+  cockpit.addColorStop(1, "#236071");
+  ctx.fillStyle = cockpit;
+  ctx.beginPath();
+  ctx.ellipse(8, 0, 10, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.fillStyle = "#f2c14e";
-  ctx.fillRect(-27, -5, 12 + Math.random() * 10, 10);
+  ctx.fillRect(-32, -4, 10 + Math.random() * 12, 8);
+  ctx.fillStyle = "rgba(232, 93, 72, 0.72)";
+  ctx.fillRect(-35, -2, 8 + Math.random() * 16, 4);
   ctx.strokeStyle = `rgba(125, 219, 220, ${0.22 + player.shield / 220})`;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, 0, 26, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 31, 25, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 }
@@ -510,18 +729,122 @@ function drawEnemies() {
   for (const enemy of enemies) {
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
-    ctx.fillStyle = enemy.type === "heavy" ? "#b8503d" : enemy.type === "zig" ? "#c36b4d" : "#e85d48";
-    ctx.beginPath();
-    ctx.moveTo(-enemy.r, 0);
-    ctx.lineTo(enemy.r * 0.75, -enemy.r * 0.75);
-    ctx.lineTo(enemy.r * 0.35, 0);
-    ctx.lineTo(enemy.r * 0.75, enemy.r * 0.75);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#19100e";
-    ctx.fillRect(enemy.r * 0.05, -4, enemy.r * 0.45, 8);
+    if (enemy.type === "heavy") {
+      drawHeavyEnemy(enemy);
+    } else if (enemy.type === "blade") {
+      drawBladeEnemy(enemy);
+    } else if (enemy.type === "drone") {
+      drawDroneEnemy(enemy);
+    } else if (enemy.type === "zig") {
+      drawZigEnemy(enemy);
+    } else {
+      drawScoutEnemy(enemy);
+    }
     ctx.restore();
   }
+}
+
+function drawScoutEnemy(enemy) {
+  const r = enemy.r;
+  ctx.fillStyle = "#e85d48";
+  ctx.beginPath();
+  ctx.moveTo(-r, 0);
+  ctx.lineTo(r * 0.85, -r * 0.72);
+  ctx.lineTo(r * 0.32, 0);
+  ctx.lineTo(r * 0.85, r * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  drawEnemyCore(r * 0.1, 0, r * 0.42, "#ffb09e");
+}
+
+function drawZigEnemy(enemy) {
+  const r = enemy.r;
+  ctx.fillStyle = "#c36b4d";
+  ctx.beginPath();
+  ctx.moveTo(-r * 1.1, 0);
+  ctx.lineTo(r * 0.7, -r);
+  ctx.lineTo(r * 0.25, -r * 0.18);
+  ctx.lineTo(r, 0);
+  ctx.lineTo(r * 0.25, r * 0.18);
+  ctx.lineTo(r * 0.7, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 220, 180, 0.38)";
+  ctx.stroke();
+  drawEnemyCore(r * 0.05, 0, r * 0.36, "#ffd0a3");
+}
+
+function drawDroneEnemy(enemy) {
+  const r = enemy.r;
+  ctx.rotate(enemy.phase * 0.15);
+  ctx.fillStyle = "#d85e7f";
+  ctx.strokeStyle = "rgba(255, 210, 230, 0.45)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = "#7b263e";
+    ctx.fillRect(r * 0.62, -3, r * 0.78, 6);
+  }
+  drawEnemyCore(0, 0, r * 0.34, "#ffadc7");
+}
+
+function drawHeavyEnemy(enemy) {
+  const r = enemy.r;
+  const armor = ctx.createLinearGradient(-r, 0, r, 0);
+  armor.addColorStop(0, "#5c2020");
+  armor.addColorStop(0.45, "#b8503d");
+  armor.addColorStop(1, "#ff9b73");
+  ctx.fillStyle = armor;
+  ctx.beginPath();
+  ctx.moveTo(-r * 1.22, -r * 0.4);
+  ctx.lineTo(-r * 0.25, -r);
+  ctx.lineTo(r * 0.92, -r * 0.58);
+  ctx.lineTo(r * 1.05, 0);
+  ctx.lineTo(r * 0.92, r * 0.58);
+  ctx.lineTo(-r * 0.25, r);
+  ctx.lineTo(-r * 1.22, r * 0.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 209, 166, 0.45)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#2a0d0d";
+  ctx.fillRect(-r * 0.65, -r * 0.14, r * 1.05, r * 0.28);
+  drawEnemyCore(r * 0.32, 0, r * 0.28, "#ffd2a0");
+}
+
+function drawBladeEnemy(enemy) {
+  const r = enemy.r;
+  ctx.rotate(Math.sin(enemy.phase) * 0.18);
+  ctx.fillStyle = "#f0566f";
+  ctx.beginPath();
+  ctx.moveTo(-r * 1.3, 0);
+  ctx.lineTo(r * 0.2, -r * 1.05);
+  ctx.lineTo(r * 0.95, -r * 0.16);
+  ctx.lineTo(r * 0.35, 0);
+  ctx.lineTo(r * 0.95, r * 0.16);
+  ctx.lineTo(r * 0.2, r * 1.05);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 230, 240, 0.55)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  drawEnemyCore(-r * 0.05, 0, r * 0.3, "#ffe2ea");
+}
+
+function drawEnemyCore(x, y, r, color) {
+  ctx.fillStyle = "#19080b";
+  ctx.beginPath();
+  ctx.ellipse(x, y, r, r * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.32, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawBullets() {
