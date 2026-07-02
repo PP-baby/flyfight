@@ -5,6 +5,7 @@ const scoreEl = document.querySelector("#score");
 const livesEl = document.querySelector("#lives");
 const shieldEl = document.querySelector("#shield");
 const waveEl = document.querySelector("#wave");
+const weaponEl = document.querySelector("#weapon");
 const overlay = document.querySelector("#overlay");
 const statusEl = document.querySelector("#status");
 const startButton = document.querySelector("#startButton");
@@ -35,6 +36,8 @@ const player = {
   shield: 100,
   cooldown: 0,
   invincible: 0,
+  weaponLevel: 1,
+  overdrive: 0,
 };
 
 const bullets = [];
@@ -83,6 +86,8 @@ function resetGame() {
     shield: 100,
     cooldown: 0,
     invincible: 1.4,
+    weaponLevel: 1,
+    overdrive: 0,
   });
   bullets.length = 0;
   enemyBullets.length = 0;
@@ -98,6 +103,7 @@ function updateHud() {
   livesEl.textContent = player.lives;
   shieldEl.textContent = `${Math.max(0, Math.round(player.shield))}%`;
   waveEl.textContent = state.wave;
+  weaponEl.textContent = player.overdrive > 0 ? `Lv.${player.weaponLevel}+` : `Lv.${player.weaponLevel}`;
 }
 
 function spawnEnemy() {
@@ -123,10 +129,38 @@ function spawnEnemy() {
 
 function firePlayer() {
   if (!state.running || state.paused || player.cooldown > 0) return;
-  bullets.push({ x: player.x + 24, y: player.y - 7, vx: 650, vy: -18, r: 4, damage: 1 });
-  bullets.push({ x: player.x + 24, y: player.y + 7, vx: 650, vy: 18, r: 4, damage: 1 });
-  player.cooldown = 0.14;
-  spark(player.x + 24, player.y, "#f2c14e", 4, 120);
+  const boosted = player.overdrive > 0;
+  const level = player.weaponLevel;
+  const damage = 1 + Math.floor(level / 2) + (boosted ? 2 : 0);
+  const speed = boosted ? 820 : 680 + level * 28;
+  const spread = [
+    { y: 0, vy: 0 },
+    { y: -9, vy: -24 },
+    { y: 9, vy: 24 },
+  ];
+
+  if (level >= 3 || boosted) {
+    spread.push({ y: -17, vy: -58 }, { y: 17, vy: 58 });
+  }
+  if (level >= 5) {
+    spread.push({ y: -25, vy: -92 }, { y: 25, vy: 92 });
+  }
+
+  for (const shot of spread) {
+    bullets.push({
+      x: player.x + 24,
+      y: player.y + shot.y,
+      vx: speed,
+      vy: shot.vy,
+      r: boosted ? 6 : 4 + Math.min(2, level * 0.35),
+      damage,
+      pierce: boosted ? 1 : level >= 4 ? 1 : 0,
+      kind: boosted ? "overdrive" : level >= 4 ? "heavy" : "normal",
+    });
+  }
+
+  player.cooldown = boosted ? 0.08 : Math.max(0.08, 0.16 - level * 0.012);
+  spark(player.x + 24, player.y, boosted ? "#c77dff" : "#f2c14e", boosted ? 9 : 5, boosted ? 180 : 125);
 }
 
 function enemyFire(enemy) {
@@ -145,13 +179,14 @@ function enemyFire(enemy) {
 }
 
 function spawnPowerup() {
-  const kind = Math.random() > 0.45 ? "shield" : "life";
+  const roll = Math.random();
+  const kind = roll > 0.78 ? "overdrive" : roll > 0.42 ? "weapon" : roll > 0.16 ? "shield" : "life";
   powerups.push({
     kind,
     x: world.w + 30,
     y: 70 + Math.random() * (world.h - 140),
-    r: 15,
-    vx: -125,
+    r: kind === "overdrive" ? 18 : 15,
+    vx: kind === "weapon" || kind === "overdrive" ? -105 : -125,
     phase: Math.random() * Math.PI,
   });
 }
@@ -219,6 +254,7 @@ function update(dt) {
   state.shake = Math.max(0, state.shake - dt * 22);
   player.cooldown = Math.max(0, player.cooldown - dt);
   player.invincible = Math.max(0, player.invincible - dt);
+  player.overdrive = Math.max(0, player.overdrive - dt);
 
   const mx = (keys.has("ArrowRight") || keys.has("KeyD") ? 1 : 0) - (keys.has("ArrowLeft") || keys.has("KeyA") ? 1 : 0);
   const my = (keys.has("ArrowDown") || keys.has("KeyS") ? 1 : 0) - (keys.has("ArrowUp") || keys.has("KeyW") ? 1 : 0);
@@ -243,7 +279,7 @@ function update(dt) {
   state.powerTimer -= dt;
   if (state.powerTimer <= 0) {
     spawnPowerup();
-    state.powerTimer = 10 + Math.random() * 8;
+    state.powerTimer = Math.max(5.5, 9 - state.wave * 0.25) + Math.random() * 5;
   }
 
   state.wave = Math.max(1, 1 + Math.floor(state.score / 900));
@@ -303,9 +339,15 @@ function collide() {
     for (let j = bullets.length - 1; j >= 0; j--) {
       const bullet = bullets[j];
       if (distance(enemy, bullet) < enemy.r + bullet.r) {
-        bullets.splice(j, 1);
-        enemy.hp -= bullet.damage;
-        spark(bullet.x, bullet.y, "#f2c14e", 5, 90);
+        const hitDamage = bullet.damage;
+        if (bullet.pierce > 0) {
+          bullet.pierce -= 1;
+          bullet.damage = Math.max(1, bullet.damage - 1);
+        } else {
+          bullets.splice(j, 1);
+        }
+        enemy.hp -= hitDamage;
+        spark(bullet.x, bullet.y, bullet.kind === "overdrive" ? "#c77dff" : "#f2c14e", 5, 90);
         if (enemy.hp <= 0) {
           enemies.splice(i, 1);
           state.score += enemy.score;
@@ -329,15 +371,35 @@ function collide() {
     const power = powerups[i];
     if (distance(player, power) < player.r + power.r) {
       powerups.splice(i, 1);
-      if (power.kind === "life") {
-        player.lives = Math.min(5, player.lives + 1);
-      } else {
-        player.shield = Math.min(150, player.shield + 45);
-      }
+      collectPowerup(power);
       state.score += 120;
-      spark(power.x, power.y, power.kind === "life" ? "#e85d48" : "#7ddbdc", 22, 155);
     }
   }
+}
+
+function collectPowerup(power) {
+  const color = powerColor(power.kind);
+  if (power.kind === "life") {
+    player.lives = Math.min(5, player.lives + 1);
+  } else if (power.kind === "shield") {
+    player.shield = Math.min(150, player.shield + 45);
+  } else if (power.kind === "weapon") {
+    player.weaponLevel = Math.min(5, player.weaponLevel + 1);
+    player.cooldown = 0;
+  } else if (power.kind === "overdrive") {
+    player.overdrive = Math.min(12, player.overdrive + 7);
+    player.cooldown = 0;
+    state.slowMo = 0.12;
+  }
+  spark(power.x, power.y, color, power.kind === "overdrive" ? 34 : 24, power.kind === "overdrive" ? 230 : 165);
+  updateHud();
+}
+
+function powerColor(kind) {
+  if (kind === "life") return "#e85d48";
+  if (kind === "shield") return "#7ddbdc";
+  if (kind === "weapon") return "#f2c14e";
+  return "#c77dff";
 }
 
 function cleanup() {
@@ -411,6 +473,13 @@ function drawPlayer() {
   if (flicker) return;
   ctx.save();
   ctx.translate(player.x, player.y);
+  if (player.overdrive > 0) {
+    ctx.strokeStyle = "rgba(199, 125, 255, 0.62)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 32 + Math.sin(performance.now() * 0.018) * 3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.fillStyle = "#7ddbdc";
   ctx.beginPath();
   ctx.moveTo(26, 0);
@@ -457,10 +526,15 @@ function drawEnemies() {
 
 function drawBullets() {
   for (const b of bullets) {
-    ctx.fillStyle = "#f2c14e";
+    ctx.fillStyle = b.kind === "overdrive" ? "#c77dff" : b.kind === "heavy" ? "#ffdc73" : "#f2c14e";
     ctx.beginPath();
-    ctx.ellipse(b.x, b.y, 11, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(b.x, b.y, b.kind === "overdrive" ? 16 : 11, b.r, 0, 0, Math.PI * 2);
     ctx.fill();
+    if (b.kind === "overdrive") {
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
   for (const b of enemyBullets) {
     ctx.fillStyle = "#e85d48";
@@ -475,21 +549,48 @@ function drawPowerups() {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.phase * 0.4);
-    ctx.fillStyle = p.kind === "life" ? "#e85d48" : "#7ddbdc";
+    ctx.fillStyle = powerColor(p.kind);
     ctx.strokeStyle = "rgba(255,255,255,0.72)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.rect(-p.r, -p.r, p.r * 2, p.r * 2);
+    if (p.kind === "overdrive") {
+      ctx.moveTo(0, -p.r - 3);
+      ctx.lineTo(p.r + 3, 0);
+      ctx.lineTo(0, p.r + 3);
+      ctx.lineTo(-p.r - 3, 0);
+      ctx.closePath();
+    } else {
+      ctx.rect(-p.r, -p.r, p.r * 2, p.r * 2);
+    }
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#ffffff";
     if (p.kind === "life") {
       ctx.fillRect(-3, -9, 6, 18);
       ctx.fillRect(-9, -3, 18, 6);
-    } else {
+    } else if (p.kind === "shield") {
       ctx.beginPath();
       ctx.arc(0, 0, 7, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (p.kind === "weapon") {
+      ctx.beginPath();
+      ctx.moveTo(-8, -7);
+      ctx.lineTo(0, -1);
+      ctx.lineTo(8, -7);
+      ctx.moveTo(-8, 3);
+      ctx.lineTo(0, 9);
+      ctx.lineTo(8, 3);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(2, -12);
+      ctx.lineTo(-5, 1);
+      ctx.lineTo(2, 1);
+      ctx.lineTo(-1, 12);
+      ctx.lineTo(8, -2);
+      ctx.lineTo(1, -2);
+      ctx.closePath();
+      ctx.fill();
     }
     ctx.restore();
   }
